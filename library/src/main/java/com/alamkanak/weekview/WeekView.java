@@ -417,6 +417,15 @@ public class WeekView extends View {
         }
     }
 
+
+    // fix rotation changes
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        mAreDimensionsInvalid = true;
+        super.onSizeChanged(w, h, oldw, oldh);
+    }
+
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
