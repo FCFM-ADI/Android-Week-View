@@ -678,43 +678,48 @@ public class WeekView extends View {
      * @param canvas The canvas to draw upon.
      */
     private void drawEvents(Calendar date, float startFromPixel, Canvas canvas) {
-        if (mEventRects != null && mEventRects.size() > 0) {
-            for (int i = 0; i < mEventRects.size(); i++) {
-                if (isSameDay(mEventRects.get(i).event.getStartTime(), date)) {
+        if (mEventRects == null || mEventRects.size() <= 0) return;
 
-                    // Calculate top.
-                    float top = mHourHeight * 24 * mEventRects.get(i).top / 1440 + mCurrentOrigin.y + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom + mTimeTextHeight/2 + mEventMarginVertical;
+        StaticLayout textLayout;
+        for (int i = 0; i < mEventRects.size(); i++) {
+            if (! isSameDay(mEventRects.get(i).event.getStartTime(), date)) continue;
 
-                    // Calculate bottom.
-                    float bottom = mEventRects.get(i).bottom;
-                    bottom = mHourHeight * 24 * bottom / 1440 + mCurrentOrigin.y + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom + mTimeTextHeight/2 - mEventMarginVertical;
+            mEventRects.get(i).rectF = null;
 
-                    // Calculate left and right.
-                    float left = startFromPixel + mEventRects.get(i).left * mWidthPerDay;
-                    if (left < startFromPixel)
-                        left += mOverlappingEventGap;
-                    float right = left + mEventRects.get(i).width * mWidthPerDay;
-                    if (right < startFromPixel + mWidthPerDay)
-                        right -= mOverlappingEventGap;
+            // Calculate top.
+            float top = mHourHeight * 24 * mEventRects.get(i).top / 1440 + mCurrentOrigin.y + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom + mTimeTextHeight/2 + mEventMarginVertical;
+            if( top >= getHeight() ) continue;
 
-                    // Draw the event and the event name on top of it.
-                    RectF eventRectF = new RectF(left, top, right, bottom);
-                    if (bottom > mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom + mTimeTextHeight/2 && left < right &&
-                            eventRectF.right > mHeaderColumnWidth &&
-                            eventRectF.left < getWidth() &&
-                            eventRectF.bottom > mHeaderTextHeight + mHeaderRowPadding * 2 + mTimeTextHeight / 2 + mHeaderMarginBottom &&
-                            eventRectF.top < getHeight() &&
-                            left < right
-                            ) {
-                        mEventRects.get(i).rectF = eventRectF;
-                        mEventBackgroundPaint.setColor(mEventRects.get(i).event.getColor() == 0 ? mDefaultEventColor : mEventRects.get(i).event.getColor());
-                        canvas.drawRoundRect(mEventRects.get(i).rectF, mEventCornerRadius, mEventCornerRadius, mEventBackgroundPaint);
-                        drawEventTitle(mEventRects.get(i).event, mEventRects.get(i).rectF, canvas, top, left);
-                    }
-                    else
-                        mEventRects.get(i).rectF = null;
-                }
-            }
+            // Calculate bottom.
+            float bottom = mEventRects.get(i).bottom;
+            bottom = mHourHeight * 24 * bottom / 1440 + mCurrentOrigin.y + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom + mTimeTextHeight/2 - mEventMarginVertical;
+            if (bottom <= mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom + mTimeTextHeight/2 ) continue;
+
+            // Calculate left.
+            float left = startFromPixel + mEventRects.get(i).left * mWidthPerDay;
+            if (left < startFromPixel) left += mOverlappingEventGap;
+            if( left >= getWidth() ) continue;
+
+            // Calculate right.
+            float right = left + mEventRects.get(i).width * mWidthPerDay;
+            if (right < startFromPixel + mWidthPerDay) right -= mOverlappingEventGap;
+            if( right <= mHeaderColumnWidth || right <= left ) continue;
+
+            // Draw the event rect.
+            mEventRects.get(i).rectF = new RectF(left, top, right, bottom);
+            mEventBackgroundPaint.setColor(mEventRects.get(i).event.getColor() == 0 ? mDefaultEventColor : mEventRects.get(i).event.getColor());
+            canvas.drawRoundRect(mEventRects.get(i).rectF, mEventCornerRadius, mEventCornerRadius, mEventBackgroundPaint);
+
+            int availableWidth = (int) (right - left - mEventPadding * 2);
+            int availableHeight = (int) (bottom - top - mEventPadding * 2);
+            if (availableWidth <= 0 || availableHeight <= 0) continue;
+
+            // Draw the event text.
+            textLayout = drawEventTitle(mEventRects.get(i).event, availableHeight, availableWidth);
+            canvas.save();
+            canvas.translate(left + mEventPadding, top + mEventPadding);
+            textLayout.draw(canvas);
+            canvas.restore();
         }
     }
 
@@ -722,14 +727,10 @@ public class WeekView extends View {
     /**
      * Draw the name of the event on top of the event rectangle.
      * @param event The event of which the title (and location) should be drawn.
-     * @param rect The rectangle on which the text is to be drawn.
-     * @param canvas The canvas to draw upon.
-     * @param originalTop The original top position of the rectangle. The rectangle may have some of its portion outside of the visible area.
-     * @param originalLeft The original left position of the rectangle. The rectangle may have some of its portion outside of the visible area.
+     * @param availableHeight The available height of the rectangle. The rectangle may have some of its portion outside of the visible area.
+     * @param availableWidth The vailable width of the rectangle. The rectangle may have some of its portion outside of the visible area.
      */
-    private void drawEventTitle(WeekViewEvent event, RectF rect, Canvas canvas, float originalTop, float originalLeft) {
-        if (rect.right - rect.left - mEventPadding * 2 < 0) return;
-
+    private StaticLayout drawEventTitle(WeekViewEvent event, int availableHeight, int availableWidth) {
         SpannableStringBuilder bob = new SpannableStringBuilder();
         if (event.getName() != null) {
             bob.append(event.getName());
@@ -740,28 +741,22 @@ public class WeekView extends View {
             bob.append(event.getLocation());
         }
 
-        // Get text dimensions
-        StaticLayout textLayout = new StaticLayout(bob, mEventTextPaint, (int) (rect.right - originalLeft - mEventPadding * 2), Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false);
+         // Get text dimensions
+        StaticLayout textLayout = new StaticLayout(bob, mEventTextPaint, availableWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false);
 
         // Crop height
-        int availableHeight = (int) (rect.bottom - originalTop - mEventPadding * 2);
-        int lineHeight = textLayout.getHeight() / textLayout.getLineCount();
-        if (lineHeight < availableHeight && textLayout.getHeight() > rect.height() - mEventPadding * 2) {
-            int lineCount = textLayout.getLineCount();
-            int availableLineCount = (int) Math.floor(lineCount * availableHeight / textLayout.getHeight());
-            float widthAvailable = (rect.right - originalLeft - mEventPadding * 2) * availableLineCount;
-            textLayout = new StaticLayout(TextUtils.ellipsize(bob, mEventTextPaint, widthAvailable, TextUtils.TruncateAt.END), mEventTextPaint, (int) (rect.right - originalLeft - mEventPadding * 2), Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false);
+        int lineCount = textLayout.getLineCount();
+        int lineHeight = textLayout.getHeight() / lineCount;
+        int availableLineCount = (int) Math.floor( availableHeight / lineHeight );
+        if( availableLineCount == 0 ) {
+            return new StaticLayout("", mEventTextPaint, availableWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false);
         }
-        else if (lineHeight >= availableHeight) {
-            int width = (int) (rect.right - originalLeft - mEventPadding * 2);
-            textLayout = new StaticLayout(TextUtils.ellipsize(bob, mEventTextPaint, width, TextUtils.TruncateAt.END), mEventTextPaint, width, Layout.Alignment.ALIGN_NORMAL, 1.0f, 1.0f, false);
+        if( availableLineCount < lineCount && availableLineCount > 0 ) {
+            bob = bob.replace( textLayout.getLineEnd(availableLineCount - 1) - 1, bob.length(), "\u2026" );
+            textLayout = new StaticLayout(bob, mEventTextPaint, availableWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false);
         }
 
-        // Draw text
-        canvas.save();
-        canvas.translate(originalLeft + mEventPadding, originalTop + mEventPadding);
-        textLayout.draw(canvas);
-        canvas.restore();
+        return textLayout;
     }
 
 
@@ -1482,13 +1477,8 @@ public class WeekView extends View {
 
     private void goToNearestOrigin(){
         float leftDays = Math.round(mCurrentOrigin.x / (mWidthPerDay + mColumnGap));
-        if(!mIsZooming){
-            if(mDistanceX > 0)
-                leftDays--;
-            else
-                leftDays++;
-        }
-        int nearestOrigin = (int) (mCurrentOrigin.x - leftDays * (mWidthPerDay+mColumnGap));
+        if(!mIsZooming) leftDays += ( mDistanceX > 0 ? -1 : +1 ) * mNumberOfVisibleDays;
+        int nearestOrigin = (int) (mCurrentOrigin.x - leftDays * (mWidthPerDay + mColumnGap));
         mStickyScroller.startScroll((int) mCurrentOrigin.x, 0, - nearestOrigin, 0);
         ViewCompat.postInvalidateOnAnimation(WeekView.this);
     }
@@ -1501,10 +1491,7 @@ public class WeekView extends View {
             if (Math.abs(mScroller.getFinalX() - mScroller.getCurrX()) < mWidthPerDay + mColumnGap && Math.abs(mScroller.getFinalX() - mScroller.getStartX()) != 0) {
                 mScroller.forceFinished(true);
                 float leftDays = Math.round(mCurrentOrigin.x / (mWidthPerDay + mColumnGap));
-                if(mScroller.getFinalX() < mScroller.getCurrX())
-                    leftDays--;
-                else
-                    leftDays++;
+                leftDays += ( mScroller.getFinalX() < mScroller.getCurrX() ? -1 : +1 )*mNumberOfVisibleDays;
                 int nearestOrigin = (int) (mCurrentOrigin.x - leftDays * (mWidthPerDay+mColumnGap));
                 mStickyScroller.startScroll((int) mCurrentOrigin.x, 0, - nearestOrigin, 0);
                 ViewCompat.postInvalidateOnAnimation(WeekView.this);
@@ -1587,13 +1574,14 @@ public class WeekView extends View {
         }
 
         int verticalOffset = 0;
+        int hourHeight = mNewHourHeight == -1 ? mHourHeight : mNewHourHeight;
         if (hour > 24)
-            verticalOffset = mHourHeight * 24;
+            verticalOffset = hourHeight * 24;
         else if (hour > 0)
-            verticalOffset = (int) (mHourHeight * hour);
+            verticalOffset = (int) ( hourHeight * hour);
 
-        if (verticalOffset > mHourHeight * 24 - getHeight() + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom)
-            verticalOffset = (int)(mHourHeight * 24 - getHeight() + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom);
+        if (verticalOffset > hourHeight * 24 - getHeight() + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom)
+            verticalOffset = (int)(hourHeight * 24 - getHeight() + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom);
 
         mCurrentOrigin.y = -verticalOffset;
         invalidate();
