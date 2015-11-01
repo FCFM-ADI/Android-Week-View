@@ -407,6 +407,7 @@ public class WeekView extends View {
 	@Override
 	protected void onSizeChanged(int w, int h, int oldw, int oldh) {
 		super.onSizeChanged(w, h, oldw, oldh);
+        mScrollToDay = mFirstVisibleDay;
 		mAreDimensionsInvalid = true;
 	}
 
@@ -459,8 +460,7 @@ public class WeekView extends View {
     private void drawHeaderRowAndEvents(Canvas canvas) {
         // Calculate the available width for each day.
         mHeaderColumnWidth = mTimeTextWidth + mHeaderColumnPadding *2;
-        mWidthPerDay = getWidth() - mHeaderColumnWidth - mColumnGap * (mNumberOfVisibleDays - 1);
-        mWidthPerDay = mWidthPerDay/mNumberOfVisibleDays;
+        mWidthPerDay = ( getWidth() - mHeaderColumnWidth - mColumnGap * (mNumberOfVisibleDays - 1) ) / mNumberOfVisibleDays;
 
         Calendar today = today();
 
@@ -637,7 +637,6 @@ public class WeekView extends View {
             canvas.drawText(dayLabel, startPixel + mWidthPerDay / 2, mHeaderTextHeight + mHeaderRowPadding, sameDay ? mTodayHeaderTextPaint : mHeaderTextPaint);
             startPixel += mWidthPerDay + mColumnGap;
         }
-
     }
 
     /**
