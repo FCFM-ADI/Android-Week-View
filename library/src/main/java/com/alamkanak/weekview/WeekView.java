@@ -9,13 +9,13 @@ import android.graphics.PointF;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Typeface;
+import android.os.Handler;
 import android.support.v4.view.GestureDetectorCompat;
 import android.support.v4.view.ViewCompat;
 import android.text.Layout;
 import android.text.SpannableStringBuilder;
 import android.text.StaticLayout;
 import android.text.TextPaint;
-import android.text.TextUtils;
 import android.text.format.DateFormat;
 import android.text.style.StyleSpan;
 import android.util.AttributeSet;
@@ -96,6 +96,7 @@ public class WeekView extends View {
     private int mHeaderColumnPadding = 10;
     private int mHeaderColumnTextColor = Color.BLACK;
     private int mNumberOfVisibleDays = 3;
+    private int mNewNumberOfVisibleDays = -1;
     private int mHeaderRowPadding = 10;
     private int mHeaderRowBackgroundColor = Color.WHITE;
     private int mDayBackgroundColor = Color.rgb(245, 245, 245);
@@ -116,7 +117,6 @@ public class WeekView extends View {
     private int mHeaderColumnBackgroundColor = Color.WHITE;
     private int mDefaultEventColor;
     private boolean mIsFirstDraw = true;
-    private boolean mAreDimensionsInvalid = true;
     @Deprecated private int mDayNameLength = LENGTH_LONG;
     private int mOverlappingEventGap = 0;
     private int mEventMarginVertical = 0;
@@ -163,7 +163,7 @@ public class WeekView extends View {
             }
             mDistanceX = distanceX * mXScrollingSpeed;
             mDistanceY = distanceY;
-            invalidate();
+            runInvalidate();
             return true;
         }
 
@@ -397,7 +397,7 @@ public class WeekView extends View {
             @Override
             public boolean onScale(ScaleGestureDetector detector) {
                 mNewHourHeight = Math.round(mHourHeight * detector.getScaleFactor());
-                invalidate();
+                runInvalidate();
                 return true;
             }
         });
@@ -406,9 +406,9 @@ public class WeekView extends View {
 	// fix rotation changes
 	@Override
 	protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        setWillNotDraw(true); // para que NO llame a onDraw
 		super.onSizeChanged(w, h, oldw, oldh);
-        mScrollToDay = mFirstVisibleDay;
-		mAreDimensionsInvalid = true;
+        runInvalidate();
 	}
 
     /**
@@ -428,6 +428,9 @@ public class WeekView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+
+        Handler h = getHandler();
+        if( h != null ) h.removeCallbacks(rInvalidate);
 
         // Draw the header row.
         drawHeaderRowAndEvents(canvas);
@@ -464,22 +467,31 @@ public class WeekView extends View {
 
         Calendar today = today();
 
-        if (mAreDimensionsInvalid) {
-            mEffectiveMinHourHeight= Math.max(mMinHourHeight, (int) ((getHeight() - mHeaderTextHeight - mHeaderRowPadding * 2 - mHeaderMarginBottom) / 24));
+        //Calculate the new height due to the zooming.
+        mEffectiveMinHourHeight = Math.max(mMinHourHeight, (int) ((getHeight() - mHeaderTextHeight - mHeaderRowPadding * 2 - mHeaderMarginBottom) / 24));
+        if (mNewHourHeight > 0){
+            if(mNewHourHeight < mEffectiveMinHourHeight)
+                mNewHourHeight = mEffectiveMinHourHeight;
+            else if(mNewHourHeight > mMaxHourHeight)
+                mNewHourHeight = mMaxHourHeight;
 
-            mAreDimensionsInvalid = false;
-            if(mScrollToDay != null)
-                goToDate(mScrollToDay);
-
-            mAreDimensionsInvalid = false;
-            if(mScrollToHour >= 0)
-                goToHour(mScrollToHour);
-
-            mScrollToDay = null;
-            mScrollToHour = -1;
-            mAreDimensionsInvalid = false;
+            mCurrentOrigin.y = (mCurrentOrigin.y/mHourHeight)*mNewHourHeight;
+            mHourHeight = mNewHourHeight;
+            mNewHourHeight = -1;
         }
-        if (mIsFirstDraw){
+
+        if( mNewNumberOfVisibleDays > 0 ) {
+            mNumberOfVisibleDays = mNewNumberOfVisibleDays;
+            mNewNumberOfVisibleDays = -1;
+        }
+
+        if(mScrollToDay != null) goToDate2(mScrollToDay);
+        mScrollToDay = null;
+
+        if(mScrollToHour >= 0) goToHour2(mScrollToHour);
+        mScrollToHour = -1;
+
+        if(mIsFirstDraw){
             mIsFirstDraw = false;
 
             // If the week view is being drawn for the first time, then consider the first day of the week.
@@ -493,18 +505,6 @@ public class WeekView extends View {
         if (mCurrentScrollDirection == Direction.VERTICAL)
             mCurrentOrigin.y -= mDistanceY;
 
-
-        //Calculate the new height due to the zooming.
-        if (mNewHourHeight > 0){
-            if(mNewHourHeight < mEffectiveMinHourHeight)
-                mNewHourHeight = mEffectiveMinHourHeight;
-            else if(mNewHourHeight > mMaxHourHeight)
-                mNewHourHeight = mMaxHourHeight;
-
-            mCurrentOrigin.y = (mCurrentOrigin.y/mHourHeight)*mNewHourHeight;
-            mHourHeight = mNewHourHeight;
-            mNewHourHeight = -1;
-        }
 
         //if the new mCurrentOrigin.y is invalid, make it valid.
         if (mCurrentOrigin.y < getHeight() - mHourHeight * 24 - mHeaderTextHeight - mHeaderRowPadding * 2 - mHeaderMarginBottom - mTimeTextHeight/2)
@@ -746,7 +746,7 @@ public class WeekView extends View {
         // Crop height
         int lineCount = textLayout.getLineCount();
         int lineHeight = textLayout.getHeight() / lineCount;
-        int availableLineCount = (int) Math.floor( availableHeight / lineHeight );
+        int availableLineCount = (int) Math.floor(availableHeight / lineHeight);
         if( availableLineCount == 0 ) {
             return new StaticLayout("", mEventTextPaint, availableWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false);
         }
@@ -1043,10 +1043,18 @@ public class WeekView extends View {
         return !(time1 == null || time2 == null) && time1.getTimeInMillis() >= time2.getTimeInMillis();
     }
 
-    @Override
-    public void invalidate() {
-        super.invalidate();
-        mAreDimensionsInvalid = true;
+    private Runnable rInvalidate = new Runnable() {
+        @Override public void run() {
+            setWillNotDraw(false);
+            WeekView.this.invalidate();
+        }
+    };
+
+    private void runInvalidate() {
+        Handler h = getHandler();
+        if( h == null ) return;
+        h.removeCallbacks(rInvalidate);
+        h.postDelayed(rInvalidate, 100);
     }
 
     /////////////////////////////////////////////////////////////////
@@ -1174,10 +1182,9 @@ public class WeekView extends View {
      * @param numberOfVisibleDays The number of visible days in a week.
      */
     public void setNumberOfVisibleDays(int numberOfVisibleDays) {
-        this.mNumberOfVisibleDays = numberOfVisibleDays;
+        mNumberOfVisibleDays = numberOfVisibleDays;
         mCurrentOrigin.x = 0;
-        mCurrentOrigin.y = 0;
-        invalidate();
+        runInvalidate();
     }
 
     public int getHourHeight() {
@@ -1186,7 +1193,7 @@ public class WeekView extends View {
 
     public void setHourHeight(int hourHeight) {
         mNewHourHeight = hourHeight;
-        invalidate();
+        runInvalidate();
     }
 
     public int getColumnGap() {
@@ -1195,7 +1202,7 @@ public class WeekView extends View {
 
     public void setColumnGap(int columnGap) {
         mColumnGap = columnGap;
-        invalidate();
+        runInvalidate();
     }
 
     public int getFirstDayOfWeek() {
@@ -1216,7 +1223,7 @@ public class WeekView extends View {
      */
     public void setFirstDayOfWeek(int firstDayOfWeek) {
         mFirstDayOfWeek = firstDayOfWeek;
-        invalidate();
+        runInvalidate();
     }
 
     public int getTextSize() {
@@ -1228,7 +1235,7 @@ public class WeekView extends View {
         mTodayHeaderTextPaint.setTextSize(mTextSize);
         mHeaderTextPaint.setTextSize(mTextSize);
         mTimeTextPaint.setTextSize(mTextSize);
-        invalidate();
+        runInvalidate();
     }
 
     public int getHeaderColumnPadding() {
@@ -1237,7 +1244,7 @@ public class WeekView extends View {
 
     public void setHeaderColumnPadding(int headerColumnPadding) {
         mHeaderColumnPadding = headerColumnPadding;
-        invalidate();
+        runInvalidate();
     }
 
     public int getHeaderColumnTextColor() {
@@ -1246,7 +1253,7 @@ public class WeekView extends View {
 
     public void setHeaderColumnTextColor(int headerColumnTextColor) {
         mHeaderColumnTextColor = headerColumnTextColor;
-        invalidate();
+        runInvalidate();
     }
 
     public int getHeaderRowPadding() {
@@ -1255,7 +1262,7 @@ public class WeekView extends View {
 
     public void setHeaderRowPadding(int headerRowPadding) {
         mHeaderRowPadding = headerRowPadding;
-        invalidate();
+        runInvalidate();
     }
 
     public int getHeaderRowBackgroundColor() {
@@ -1264,7 +1271,7 @@ public class WeekView extends View {
 
     public void setHeaderRowBackgroundColor(int headerRowBackgroundColor) {
         mHeaderRowBackgroundColor = headerRowBackgroundColor;
-        invalidate();
+        runInvalidate();
     }
 
     public int getDayBackgroundColor() {
@@ -1273,7 +1280,7 @@ public class WeekView extends View {
 
     public void setDayBackgroundColor(int dayBackgroundColor) {
         mDayBackgroundColor = dayBackgroundColor;
-        invalidate();
+        runInvalidate();
     }
 
     public int getHourSeparatorColor() {
@@ -1282,7 +1289,7 @@ public class WeekView extends View {
 
     public void setHourSeparatorColor(int hourSeparatorColor) {
         mHourSeparatorColor = hourSeparatorColor;
-        invalidate();
+        runInvalidate();
     }
 
     public int getTodayBackgroundColor() {
@@ -1291,7 +1298,7 @@ public class WeekView extends View {
 
     public void setTodayBackgroundColor(int todayBackgroundColor) {
         mTodayBackgroundColor = todayBackgroundColor;
-        invalidate();
+        runInvalidate();
     }
 
     public int getHourSeparatorHeight() {
@@ -1300,7 +1307,7 @@ public class WeekView extends View {
 
     public void setHourSeparatorHeight(int hourSeparatorHeight) {
         mHourSeparatorHeight = hourSeparatorHeight;
-        invalidate();
+        runInvalidate();
     }
 
     public int getTodayHeaderTextColor() {
@@ -1309,7 +1316,7 @@ public class WeekView extends View {
 
     public void setTodayHeaderTextColor(int todayHeaderTextColor) {
         mTodayHeaderTextColor = todayHeaderTextColor;
-        invalidate();
+        runInvalidate();
     }
 
     public int getEventTextSize() {
@@ -1319,7 +1326,7 @@ public class WeekView extends View {
     public void setEventTextSize(int eventTextSize) {
         mEventTextSize = eventTextSize;
         mEventTextPaint.setTextSize(mEventTextSize);
-        invalidate();
+        runInvalidate();
     }
 
     public int getEventTextColor() {
@@ -1328,7 +1335,7 @@ public class WeekView extends View {
 
     public void setEventTextColor(int eventTextColor) {
         mEventTextColor = eventTextColor;
-        invalidate();
+        runInvalidate();
     }
 
     public int getEventPadding() {
@@ -1337,7 +1344,7 @@ public class WeekView extends View {
 
     public void setEventPadding(int eventPadding) {
         mEventPadding = eventPadding;
-        invalidate();
+        runInvalidate();
     }
 
     public int getHeaderColumnBackgroundColor() {
@@ -1346,7 +1353,7 @@ public class WeekView extends View {
 
     public void setHeaderColumnBackgroundColor(int headerColumnBackgroundColor) {
         mHeaderColumnBackgroundColor = headerColumnBackgroundColor;
-        invalidate();
+        runInvalidate();
     }
 
     public int getDefaultEventColor() {
@@ -1355,7 +1362,7 @@ public class WeekView extends View {
 
     public void setDefaultEventColor(int defaultEventColor) {
         mDefaultEventColor = defaultEventColor;
-        invalidate();
+        runInvalidate();
     }
 
     /**
@@ -1395,7 +1402,7 @@ public class WeekView extends View {
      */
     public void setOverlappingEventGap(int overlappingEventGap) {
         this.mOverlappingEventGap = overlappingEventGap;
-        invalidate();
+        runInvalidate();
     }
 
     public int getEventCornerRadius() {
@@ -1422,7 +1429,7 @@ public class WeekView extends View {
      */
     public void setEventMarginVertical(int eventMarginVertical) {
         this.mEventMarginVertical = eventMarginVertical;
-        invalidate();
+        runInvalidate();
     }
 
     /**
@@ -1480,6 +1487,7 @@ public class WeekView extends View {
         int nearestOrigin = (int) (mCurrentOrigin.x - leftDays * (mWidthPerDay + mColumnGap));
         mStickyScroller.startScroll((int) mCurrentOrigin.x, 0, - nearestOrigin, 0);
         ViewCompat.postInvalidateOnAnimation(WeekView.this);
+        runInvalidate();
     }
 
 
@@ -1526,17 +1534,12 @@ public class WeekView extends View {
      * Show a specific day on the week view.
      * @param date The date to show.
      */
-    public void goToDate(Calendar date) {
+    public void goToDate2(Calendar date) {
         mScroller.forceFinished(true);
         date.set(Calendar.HOUR_OF_DAY, 0);
         date.set(Calendar.MINUTE, 0);
         date.set(Calendar.SECOND, 0);
         date.set(Calendar.MILLISECOND, 0);
-
-        if(mAreDimensionsInvalid) {
-            mScrollToDay = date;
-            return;
-        }
 
         mRefreshEvents = true;
 
@@ -1549,9 +1552,13 @@ public class WeekView extends View {
         long day = 1000L * 60L * 60L * 24L;
         long dateInMillis = date.getTimeInMillis() + date.getTimeZone().getOffset(date.getTimeInMillis());
         long todayInMillis = today.getTimeInMillis() + today.getTimeZone().getOffset(today.getTimeInMillis());
-        long dateDifference = (dateInMillis/day) - (todayInMillis/day);
-        mCurrentOrigin.x = - dateDifference * (mWidthPerDay + mColumnGap);
-        invalidate();
+        long dateDifference = (dateInMillis / day) - (todayInMillis / day);
+        mCurrentOrigin.x = -dateDifference * (mWidthPerDay + mColumnGap);
+    }
+
+    public void goToDate(Calendar date) {
+        mScrollToDay = date;
+        runInvalidate();
     }
 
     /**
@@ -1559,31 +1566,25 @@ public class WeekView extends View {
      */
     public void notifyDatasetChanged(){
         mRefreshEvents = true;
-        invalidate();
+        runInvalidate();
     }
 
     /**
      * Vertically scroll to a specific hour in the week view.
      * @param hour The hour to scroll to in 24-hour format. Supported values are 0-24.
      */
-    public void goToHour(double hour){
-        if (mAreDimensionsInvalid) {
-            mScrollToHour = hour;
-            return;
-        }
+    public void goToHour2(double hour) {
+        int verticalOffset = Math.max( 0, Math.min( (int) (mHourHeight * hour), mHourHeight * 24 ) );
 
-        int verticalOffset = 0;
-        int hourHeight = mNewHourHeight == -1 ? mHourHeight : mNewHourHeight;
-        if (hour > 24)
-            verticalOffset = hourHeight * 24;
-        else if (hour > 0)
-            verticalOffset = (int) ( hourHeight * hour);
-
-        if (verticalOffset > hourHeight * 24 - getHeight() + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom)
-            verticalOffset = (int)(hourHeight * 24 - getHeight() + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom);
+        if (verticalOffset > mHourHeight * 24 - getHeight() + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom)
+            verticalOffset = (int) (mHourHeight * 24 - getHeight() + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom);
 
         mCurrentOrigin.y = -verticalOffset;
-        invalidate();
+    }
+
+    public void goToHour(double hour){
+        mScrollToHour = hour;
+        runInvalidate();
     }
 
     /**
