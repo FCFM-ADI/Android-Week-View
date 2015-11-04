@@ -163,7 +163,7 @@ public class WeekView extends View {
             }
             mDistanceX = distanceX * mXScrollingSpeed;
             mDistanceY = distanceY;
-            runInvalidate();
+            invalidate();
             return true;
         }
 

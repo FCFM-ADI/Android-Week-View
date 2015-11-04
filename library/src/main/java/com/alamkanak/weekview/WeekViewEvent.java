@@ -13,6 +13,7 @@ public class WeekViewEvent {
     private String mName;
     private String mLocation;
     private int mColor;
+    private String mCustom;
 
     public WeekViewEvent(){
 
@@ -127,5 +128,13 @@ public class WeekViewEvent {
 
     public void setId(long id) {
         this.mId = id;
+    }
+
+    public String getCustom() {
+        return mCustom;
+    }
+
+    public void setCustom(String custom) {
+        this.mCustom = custom;
     }
 }
