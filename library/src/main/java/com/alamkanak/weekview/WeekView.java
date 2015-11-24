@@ -1182,6 +1182,7 @@ public class WeekView extends View {
      * @param numberOfVisibleDays The number of visible days in a week.
      */
     public void setNumberOfVisibleDays(int numberOfVisibleDays) {
+        mXScrollingSpeed = mXScrollingSpeed * ( (float) mNumberOfVisibleDays / numberOfVisibleDays );
         mNumberOfVisibleDays = numberOfVisibleDays;
         mCurrentOrigin.x = 0;
         runInvalidate();
