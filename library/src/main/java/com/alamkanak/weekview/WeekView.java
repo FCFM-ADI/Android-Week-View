@@ -709,8 +709,8 @@ public class WeekView extends View {
             mEventBackgroundPaint.setColor(mEventRects.get(i).event.getColor() == 0 ? mDefaultEventColor : mEventRects.get(i).event.getColor());
             canvas.drawRoundRect(mEventRects.get(i).rectF, mEventCornerRadius, mEventCornerRadius, mEventBackgroundPaint);
 
-            int availableWidth = (int) (right - left - mEventPadding * 2);
-            int availableHeight = (int) (bottom - top - mEventPadding * 2);
+            int availableWidth = Math.round( right - left - mEventPadding * 2 );
+            int availableHeight = Math.round( bottom - top - mEventPadding * 2 );
             if (availableWidth <= 0 || availableHeight <= 0) continue;
 
             // Draw the event text.
@@ -730,32 +730,41 @@ public class WeekView extends View {
      * @param availableWidth The vailable width of the rectangle. The rectangle may have some of its portion outside of the visible area.
      */
     private StaticLayout drawEventTitle(WeekViewEvent event, int availableHeight, int availableWidth) {
-        SpannableStringBuilder bob = new SpannableStringBuilder();
-        if (event.getName() != null) {
-            bob.append(event.getName());
-            bob.setSpan(new StyleSpan(android.graphics.Typeface.BOLD),0,bob.length(),0);
-            bob.append(' ');
-        }
-        if (event.getLocation() != null) {
-            bob.append(event.getLocation());
+        if( event.textLayout != null
+                && Math.abs( event.lastWidth - availableWidth ) <= 1
+                && Math.abs( event.lastHeight - availableHeight ) <= 1 ) return event.textLayout;
+
+        event.lastWidth = availableWidth;
+        event.lastHeight = availableHeight;
+
+        if( event.bob == null ) {
+            event.bob = new SpannableStringBuilder();
+            if (event.getName() != null) {
+                event.bob.append(event.getName());
+                event.bob.setSpan(new StyleSpan(android.graphics.Typeface.BOLD),0, event.bob.length(),0);
+                event.bob.append(' ');
+            }
+            if (event.getLocation() != null) {
+                event.bob.append(event.getLocation());
+            }
         }
 
          // Get text dimensions
-        StaticLayout textLayout = new StaticLayout(bob, mEventTextPaint, availableWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false);
+        event.textLayout = new StaticLayout( event.bob, mEventTextPaint, availableWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false);
 
         // Crop height
-        int lineCount = textLayout.getLineCount();
-        int lineHeight = textLayout.getHeight() / lineCount;
+        int lineCount = event.textLayout.getLineCount();
+        int lineHeight = event.textLayout.getHeight() / lineCount;
         int availableLineCount = (int) Math.floor(availableHeight / lineHeight);
         if( availableLineCount == 0 ) {
-            return new StaticLayout("", mEventTextPaint, availableWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false);
+            event.textLayout = new StaticLayout("", mEventTextPaint, availableWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false);
         }
         if( availableLineCount < lineCount && availableLineCount > 0 ) {
-            bob = bob.replace( textLayout.getLineEnd(availableLineCount - 1) - 1, bob.length(), "\u2026" );
-            textLayout = new StaticLayout(bob, mEventTextPaint, availableWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false);
+            SpannableStringBuilder bob = event.bob.replace( event.textLayout.getLineEnd(availableLineCount - 1) - 1, event.bob.length(), "\u2026" );
+            event.textLayout = new StaticLayout(bob, mEventTextPaint, availableWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false);
         }
 
-        return textLayout;
+        return event.textLayout;
     }
 
 

@@ -1,6 +1,8 @@
 package com.alamkanak.weekview;
 
-import java.util.Calendar;
+import android.text.StaticLayout;
+
+import java.util.Calendar;import android.text.SpannableStringBuilder;
 
 /**
  * Created by Raquib-ul-Alam Kanak on 7/21/2014.
@@ -14,10 +16,12 @@ public class WeekViewEvent {
     private String mLocation;
     private int mColor;
     private String mCustom;
+    public SpannableStringBuilder bob;
+    public StaticLayout textLayout;
+    public int lastHeight;
+    public int lastWidth;
 
-    public WeekViewEvent(){
-
-    }
+    public WeekViewEvent(){}
 
     /**
      * Initializes the event for week view.
