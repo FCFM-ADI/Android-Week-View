@@ -709,8 +709,8 @@ public class WeekView extends View {
             mEventBackgroundPaint.setColor(mEventRects.get(i).event.getColor() == 0 ? mDefaultEventColor : mEventRects.get(i).event.getColor());
             canvas.drawRoundRect(mEventRects.get(i).rectF, mEventCornerRadius, mEventCornerRadius, mEventBackgroundPaint);
 
-            int availableWidth = Math.round( right - left - mEventPadding * 2 );
-            int availableHeight = Math.round( bottom - top - mEventPadding * 2 );
+            int availableWidth = Math.round(right - left - mEventPadding * 2);
+            int availableHeight = Math.round(bottom - top - mEventPadding * 2);
             if (availableWidth <= 0 || availableHeight <= 0) continue;
 
             // Draw the event text.
@@ -1504,6 +1504,7 @@ public class WeekView extends View {
     @Override
     public void computeScroll() {
         super.computeScroll();
+        boolean invalidate = false;
         if (mScroller.computeScrollOffset()) {
             if (Math.abs(mScroller.getFinalX() - mScroller.getCurrX()) < mWidthPerDay + mColumnGap && Math.abs(mScroller.getFinalX() - mScroller.getStartX()) != 0) {
                 mScroller.forceFinished(true);
@@ -1511,18 +1512,20 @@ public class WeekView extends View {
                 leftDays += ( mScroller.getFinalX() < mScroller.getCurrX() ? -1 : +1 )*mNumberOfVisibleDays;
                 int nearestOrigin = (int) (mCurrentOrigin.x - leftDays * (mWidthPerDay+mColumnGap));
                 mStickyScroller.startScroll((int) mCurrentOrigin.x, 0, - nearestOrigin, 0);
-                ViewCompat.postInvalidateOnAnimation(WeekView.this);
+                invalidate = true;
             }
             else {
                 if (mCurrentFlingDirection == Direction.VERTICAL) mCurrentOrigin.y = mScroller.getCurrY();
                 else mCurrentOrigin.x = mScroller.getCurrX();
-                ViewCompat.postInvalidateOnAnimation(this);
+                invalidate = true;
             }
         }
         if (mStickyScroller.computeScrollOffset()) {
             mCurrentOrigin.x = mStickyScroller.getCurrX();
-            ViewCompat.postInvalidateOnAnimation(this);
+            invalidate = true;
+
         }
+        if( invalidate ) ViewCompat.postInvalidateOnAnimation(this);
     }
 
 
