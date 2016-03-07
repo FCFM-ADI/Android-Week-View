@@ -129,6 +129,9 @@ public class WeekView extends View {
     private boolean mIsZooming;
     private int mEventCornerRadius = 0;
 
+    private int mStartHour = 0;
+    private int mEndHour = 24;
+
     // Listeners.
     private EventClickListener mEventClickListener;
     private EventLongPressListener mEventLongPressListener;
@@ -175,7 +178,8 @@ public class WeekView extends View {
                 mScroller.fling((int) mCurrentOrigin.x, 0, (int) (velocityX * mXScrollingSpeed), 0, Integer.MIN_VALUE, Integer.MAX_VALUE, 0, 0);
             }
             else if (mCurrentFlingDirection == Direction.VERTICAL){
-                mScroller.fling(0, (int) mCurrentOrigin.y, 0, (int) velocityY, 0, 0, (int) -(mHourHeight * 24 + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom + mTimeTextHeight/2 - getHeight()), 0);
+                int hs = mEndHour - mStartHour;
+                mScroller.fling(0, (int) mCurrentOrigin.y, 0, (int) velocityY, 0, 0, (int) -(mHourHeight * hs + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom + mTimeTextHeight/2 - getHeight()), 0);
             }
 
             ViewCompat.postInvalidateOnAnimation(WeekView.this);
@@ -291,6 +295,9 @@ public class WeekView extends View {
             mEventMarginVertical = a.getDimensionPixelSize(R.styleable.WeekView_eventMarginVertical, mEventMarginVertical);
             mXScrollingSpeed = a.getFloat(R.styleable.WeekView_xScrollingSpeed, mXScrollingSpeed);
             mEventCornerRadius = a.getDimensionPixelSize(R.styleable.WeekView_eventCornerRadius, mEventCornerRadius);
+
+            mStartHour = a.getInteger(R.styleable.WeekView_startHour, mStartHour);
+            mEndHour = a.getInteger(R.styleable.WeekView_endHour, mEndHour);
         } finally {
             a.recycle();
         }
@@ -416,7 +423,7 @@ public class WeekView extends View {
      */
     private void initTextTimeWidth() {
         mTimeTextWidth = 0;
-        for (int i = 0; i < 24; i++) {
+        for (int i = mStartHour; i < mEndHour; i++) {
             // measure time string and get max width
             String time = getDateTimeInterpreter().interpretTime(i);
             if (time == null)
@@ -449,8 +456,8 @@ public class WeekView extends View {
         // Draw the background color for the header column.
         canvas.drawRect(0, mHeaderTextHeight + mHeaderRowPadding * 2, mHeaderColumnWidth, getHeight(), mHeaderColumnBackgroundPaint);
 
-        for (int i = 0; i < 24; i++) {
-            float top = mHeaderTextHeight + mHeaderRowPadding * 2 + mCurrentOrigin.y + mHourHeight * i + mHeaderMarginBottom;
+        for (int i = mStartHour; i < mEndHour; i++) {
+            float top = mHeaderTextHeight + mHeaderRowPadding * 2 + mCurrentOrigin.y + mHourHeight * ( i - mStartHour ) + mHeaderMarginBottom;
 
             // Draw the text if its y position is not outside of the visible area. The pivot point of the text is the point at the bottom-right corner.
             String time = getDateTimeInterpreter().interpretTime(i);
@@ -468,7 +475,8 @@ public class WeekView extends View {
         Calendar today = today();
 
         //Calculate the new height due to the zooming.
-        mEffectiveMinHourHeight = Math.max(mMinHourHeight, (int) ((getHeight() - mHeaderTextHeight - mHeaderRowPadding * 2 - mHeaderMarginBottom) / 24));
+        mEffectiveMinHourHeight =
+            Math.max(mMinHourHeight, (int) ((getHeight() - mHeaderTextHeight - mHeaderRowPadding * 2 - mHeaderMarginBottom) / (mEndHour - mStartHour)));
         if (mNewHourHeight > 0){
             if(mNewHourHeight < mEffectiveMinHourHeight)
                 mNewHourHeight = mEffectiveMinHourHeight;
@@ -507,8 +515,9 @@ public class WeekView extends View {
 
 
         //if the new mCurrentOrigin.y is invalid, make it valid.
-        if (mCurrentOrigin.y < getHeight() - mHourHeight * 24 - mHeaderTextHeight - mHeaderRowPadding * 2 - mHeaderMarginBottom - mTimeTextHeight/2)
-            mCurrentOrigin.y = getHeight() - mHourHeight * 24 - mHeaderTextHeight - mHeaderRowPadding * 2 - mHeaderMarginBottom - mTimeTextHeight/2;
+        int hs = mEndHour - mStartHour;
+        if (mCurrentOrigin.y < getHeight() - mHourHeight * hs - mHeaderTextHeight - mHeaderRowPadding * 2 - mHeaderMarginBottom - mTimeTextHeight/2)
+            mCurrentOrigin.y = getHeight() - mHourHeight * hs - mHeaderTextHeight - mHeaderRowPadding * 2 - mHeaderMarginBottom - mTimeTextHeight/2;
         //Don't put an else if because it will trigger a glitch when completly zoomed out and scrolling vertically.
         if(mCurrentOrigin.y > 0)
             mCurrentOrigin.y = 0;
@@ -590,8 +599,8 @@ public class WeekView extends View {
 
             // Prepare the separator lines for hours.
             int i = 0;
-            for (int hourNumber = 0; hourNumber < 24; hourNumber++) {
-                float top = mHeaderTextHeight + mHeaderRowPadding * 2 + mCurrentOrigin.y + mHourHeight * hourNumber + mTimeTextHeight/2 + mHeaderMarginBottom;
+            for (int hourNumber = mStartHour; hourNumber < mEndHour; hourNumber++) {
+                float top = mHeaderTextHeight + mHeaderRowPadding * 2 + mCurrentOrigin.y + mHourHeight * ( hourNumber - mStartHour ) + mTimeTextHeight/2 + mHeaderMarginBottom;
                 if (top > mHeaderTextHeight + mHeaderRowPadding * 2 + mTimeTextHeight/2 + mHeaderMarginBottom - mHourSeparatorHeight && top < getHeight() && startPixel + mWidthPerDay - start > 0){
                     hourLines[i * 4] = start;
                     hourLines[i * 4 + 1] = top;
@@ -611,7 +620,7 @@ public class WeekView extends View {
             if(mUseNewColoring && sameDay){
                 float startY = mHeaderTextHeight + mHeaderRowPadding * 2 + mTimeTextHeight/2 + mHeaderMarginBottom + mCurrentOrigin.y;
                 Calendar now = Calendar.getInstance();
-                float beforeNow = (now.get(Calendar.HOUR_OF_DAY)+now.get(Calendar.MINUTE)/60.0f)*mHourHeight;
+                float beforeNow = (now.get(Calendar.HOUR_OF_DAY)+now.get(Calendar.MINUTE)/60.0f - mStartHour)*mHourHeight;
                 canvas.drawLine(start, startY+beforeNow, startPixel + mWidthPerDay, startY+beforeNow, mNowLinePaint);
             }
 
@@ -686,12 +695,13 @@ public class WeekView extends View {
             mEventRects.get(i).rectF = null;
 
             // Calculate top.
-            float top = mHourHeight * 24 * mEventRects.get(i).top / 1440 + mCurrentOrigin.y + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom + mTimeTextHeight/2 + mEventMarginVertical;
+            int hs = mEndHour - mStartHour;
+            float top = mHourHeight * hs * mEventRects.get(i).top / 1440 + mCurrentOrigin.y + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom + mTimeTextHeight/2 + mEventMarginVertical;
             if( top >= getHeight() ) continue;
 
             // Calculate bottom.
             float bottom = mEventRects.get(i).bottom;
-            bottom = mHourHeight * 24 * bottom / 1440 + mCurrentOrigin.y + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom + mTimeTextHeight/2 - mEventMarginVertical;
+            bottom = mHourHeight * hs * bottom / 1440 + mCurrentOrigin.y + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom + mTimeTextHeight/2 - mEventMarginVertical;
             if (bottom <= mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom + mTimeTextHeight/2 ) continue;
 
             // Calculate left.
@@ -1587,10 +1597,10 @@ public class WeekView extends View {
      * @param hour The hour to scroll to in 24-hour format. Supported values are 0-24.
      */
     public void goToHour2(double hour) {
-        int verticalOffset = Math.max( 0, Math.min( (int) (mHourHeight * hour), mHourHeight * 24 ) );
-
-        if (verticalOffset > mHourHeight * 24 - getHeight() + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom)
-            verticalOffset = (int) (mHourHeight * 24 - getHeight() + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom);
+        int hs = mEndHour - mStartHour;
+        int verticalOffset = Math.max( 0, Math.min( (int) (mHourHeight * hour - mEndHour), mHourHeight * hs  ) );
+        if (verticalOffset > mHourHeight * hs - getHeight() + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom)
+            verticalOffset = (int) (mHourHeight * hs - getHeight() + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom);
 
         mCurrentOrigin.y = -verticalOffset;
     }
