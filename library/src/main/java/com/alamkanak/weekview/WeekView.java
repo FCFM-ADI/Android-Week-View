@@ -695,13 +695,12 @@ public class WeekView extends View {
             mEventRects.get(i).rectF = null;
 
             // Calculate top.
-            int hs = mEndHour - mStartHour;
-            float top = mHourHeight * hs * mEventRects.get(i).top / 1440 + mCurrentOrigin.y + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom + mTimeTextHeight/2 + mEventMarginVertical;
+            float top = mHourHeight * ( mEventRects.get(i).top / 60 - mStartHour ) + mCurrentOrigin.y + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom + mTimeTextHeight/2 + mEventMarginVertical;
             if( top >= getHeight() ) continue;
 
             // Calculate bottom.
             float bottom = mEventRects.get(i).bottom;
-            bottom = mHourHeight * hs * bottom / 1440 + mCurrentOrigin.y + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom + mTimeTextHeight/2 - mEventMarginVertical;
+            bottom = mHourHeight * ( bottom / 60 - mStartHour ) + mCurrentOrigin.y + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom + mTimeTextHeight/2 - mEventMarginVertical;
             if (bottom <= mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom + mTimeTextHeight/2 ) continue;
 
             // Calculate left.
