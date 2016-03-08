@@ -1597,7 +1597,8 @@ public class WeekView extends View {
      */
     public void goToHour2(double hour) {
         int hs = mEndHour - mStartHour;
-        int verticalOffset = Math.max( 0, Math.min( (int) (mHourHeight * hour - mEndHour), mHourHeight * hs  ) );
+        hour -= mStartHour;
+        int verticalOffset = Math.max( 0, Math.min( (int) (mHourHeight * hour ), mHourHeight * hs  ) );
         if (verticalOffset > mHourHeight * hs - getHeight() + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom)
             verticalOffset = (int) (mHourHeight * hs - getHeight() + mHeaderTextHeight + mHeaderRowPadding * 2 + mHeaderMarginBottom);
 
